@@ -1,0 +1,67 @@
+from machine import Pin, ADC, PWM
+import time
+
+# IR sensor pins
+right_sensor = ADC(Pin(26))  # ADC0
+left_sensor = ADC(Pin(27))   # ADC1
+
+# Motor pins
+motor1_pin1 = PWM(Pin(18))
+motor1_pin2 = PWM(Pin(19))
+motor2_pin1 = PWM(Pin(20))
+motor2_pin2 = PWM(Pin(21))
+
+# Set PWM frequency
+motor1_pin1.freq(1000)
+motor1_pin2.freq(1000)
+motor2_pin1.freq(1000)
+motor2_pin2.freq(1000)
+
+# PID constants
+Kp = 0.5
+Ki = 0.1
+Kd = 0.01
+
+last_error = 0
+integral = 0
+
+def set_motor_speed(motor, speed):
+    if speed > 0:
+        motor.duty_u16(int(speed * 65535 / 255))
+    else:
+        motor.duty_u16(0)
+
+def control_motors(output):
+    if output > 0:
+        # Turn right
+        set_motor_speed(motor1_pin1, 255 - output)
+        set_motor_speed(motor1_pin2, 0)
+        set_motor_speed(motor2_pin1, 255)
+        set_motor_speed(motor2_pin2, 0)
+    else:
+        # Turn left
+        set_motor_speed(motor1_pin1, 255)
+        set_motor_speed(motor1_pin2, 0)
+        set_motor_speed(motor2_pin1, 255 + output)
+        set_motor_speed(motor2_pin2, 0)
+
+while True:
+    right_value = right_sensor.read_u16() >> 8
+    left_value = left_sensor.read_u16() >> 8
+
+    error = left_value - right_value
+
+    integral += error
+    derivative = error - last_error
+    output = Kp * error + Ki * integral + Kd * derivative
+
+    last_error = error
+
+    if output > 255:
+        output = 255
+    if output < -255:
+        output = -255
+
+    control_motors(output)
+    
+    time.sleep(0.01)
